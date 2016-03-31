@@ -19,7 +19,7 @@ library(GSVA)
 
 
 
-allegro = function(outputName, FDR =.05, inputModel = 'simple', ;
+allegro = function(outputName, outPutSubsetName, FDR =.05, inputModel = 'simple', 
 smkStatus = 'all', varFilter = 20000){
 
 
@@ -44,7 +44,7 @@ if (smkStatus == 'currents'){data = data[,which(pData(data)$SMK == 1)]
 MAD<-apply(exprs(data), 1, mad)
 topMad <- order(MAD, decreasing = T)[1:varFilter]
 subset = data[topMad,]
-
+saveRDS(subset, 'allSubset.RDS')
 
 
 ###Define model object and contrasts to feed limma
@@ -53,7 +53,7 @@ colnames(model) = c("Intercept", "PY")
 
 ###Feed limma model and expressionSet to identify genes that correlate with PY at q < .05
 contrast.matrix <- makeContrasts(PY, levels = model)
-fit = lmFit(exprs(data), model)
+fit = lmFit(exprs(subset), model)
 fit = contrasts.fit(fit, contrast.matrix)
 fit = eBayes(fit)
 limmaRes = topTable(fit, adjust.method = "BH", n = Inf, sort.by = "P")
@@ -64,5 +64,32 @@ geneNames = fData(data)[which(  rownames(fData(data)) %in% rownames(limmaRes.sig
 
 ###Save as RDS
 setwd("~")
-saveRDS(geneNames, outputName)
+saveRDS(geneNames, outputName)}
+
+
+
+###Now we take the intersect of the leading edge genes and limma genes
+leadingEdgeFormers = readRDS("leadingEdgeFormers.RDS")
+leadingEdgeCurrents = readRDS('leadingEdgeCurrents.RDS')
+
+currentGenes = readRDS("currents.RDS")
+formerGenes = readRDS("formers.RDS")
+
+geneSetCurrents = intersect(leadingEdgeCurrents,currentGenes)
+geneSetFormers = intersect(leadingEdgeFormers, formerGenes)
+
+
+calcGSVA = function(geneSet){
+
+indices = which(rownames(exprs(subset)) %in% rownames(fData(subset))[which(fData(subset)$symbols %in% geneSet)])
+genes = list(rownames(exprs(subset))[indices])
+#gsva takes as inputs an expression set (the full shebang, not the matrix)
+gsva = gsva(subset, genes)
+linearModel = lm(packYears ~ as.numeric(exprs(gsva$es.obs)))
+results = list(gsva, linearModel)
+
+return(results)}
+
+
+
 
